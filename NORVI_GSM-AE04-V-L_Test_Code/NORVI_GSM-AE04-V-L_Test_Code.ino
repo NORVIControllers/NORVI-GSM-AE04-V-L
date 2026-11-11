@@ -1,15 +1,19 @@
 /*
- * RTC Check
- * micro SD Card Check 
- * RS485
- * EC25 ADDON
- * All Output Turn ON Series
- * All input status serial print
- * Turns ON All Outputs in series
- * Serial prints all the input status
- * External Antenna Test
+ * NORVI-GSM-AE04-V-L FINAL
+ * 
+ * SD
+ * RTC
+ * OLED Display
+ * 3 PUSH BUTTONS 
+ * OLED Displa
+ * 6 Digital Inputs 
+ * 6 Analog Inputs(0-10V)
+ * 2 Transistor Outputs
+ * RS-485 Communication 
+ * LTE Communication
+ * 
  */
-
+#include <WiFi.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -47,6 +51,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 Adafruit_ADS1115 ads1;
 Adafruit_ADS1115 ads2;
+#define VOLTAGE_DIVIDER_RATIO 0.2065
 
 RTC_DS3231 rtc; 
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -59,13 +64,13 @@ int readSwitch(){
 }
 unsigned long int timer1 = 0;
 
-// ================================================ SETUP ================================================
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Hello");
   
   pinMode(RS485_FC, OUTPUT);
-  digitalWrite(RS485_FC, HIGH);   // RS-485 
+  digitalWrite(RS485_FC, HIGH);   
   
   Serial1.begin(9600, SERIAL_8N1, RS485_RX, RS485_TX); 
   Serial2.begin(115200, SERIAL_8N1, GSM_RX, GSM_TX); 
@@ -87,7 +92,7 @@ void setup() {
   pinMode(INPUT6, INPUT);
   Wire.begin(16,17);
 
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
     Serial.println(F("SSD1306 allocation failed"));
     for(;;); // Don't proceed, loop forever
   }
@@ -100,15 +105,22 @@ void setup() {
     Serial.println("Failed to initialize ADS 2 .");
     while (1);
   }
+  Serial.println("");
+  WiFi.mode(WIFI_MODE_APSTA);
+  delay(300);
+  wifi_test();
+  Serial.println("");
   RTC_Check();
   delay(1000);
+  Serial.println("");
   SD_CHECK();
   delay(1000);
+  Serial.println("");
   
   Serial.println("Testing Modem");  
   timer1 = millis();
   Serial2.println("AT");
-  while(millis()<timer1+10000){
+  while(millis()<timer1+3000){
     while (Serial2.available()) {
     int inByte = Serial2.read();
     Serial.write(inByte);
@@ -116,7 +128,7 @@ void setup() {
   }
   timer1 = millis();
   Serial2.println("AT+CPIN?");
-  while(millis()<timer1+10000){
+  while(millis()<timer1+2000){
     while (Serial2.available()) {
     int inByte = Serial2.read();
     Serial.write(inByte);
@@ -124,30 +136,30 @@ void setup() {
   }
   timer1 = millis();
   Serial2.println("AT+CFUN?");
-  while(millis()<timer1+10000){
+  while(millis()<timer1+2000){
+    while (Serial2.available()) {
+    int inByte = Serial2.read();
+    Serial.write(inByte);
+    }
+  }
+  timer1 = millis();
+  Serial2.println("AT+csq");
+  while(millis()<timer1+2000){
     while (Serial2.available()) {
     int inByte = Serial2.read();
     Serial.write(inByte);
     }
   }
   Serial.println("Testing Modem Done");
-  adcAttachPin(36);
-  digitalWrite(RS485_FC, HIGH);   // RS-485 
+
+  
+  digitalWrite(RS485_FC, HIGH);   
 }
 
 void loop() {
-  int16_t adc0, adc1, adc2, adc3;
-  float volts0, volts1, volts2, volts3;
-  // read from port 0, send to port 1:
-  while (Serial.available()) {
-    int inByte = Serial.read();
-    Serial2.write(inByte);
-  }
-  while (Serial2.available()) {
-    int inByte = Serial2.read();
-    Serial.write(inByte);
-  }
-
+  
+ 
+  Serial.println(""); 
   Serial.print(digitalRead(INPUT1));
   Serial.print(digitalRead(INPUT2));
   Serial.print(digitalRead(INPUT3));
@@ -156,24 +168,18 @@ void loop() {
   Serial.print(digitalRead(INPUT6));
   Serial.println(""); 
   
-  adc0 = ads1.readADC_SingleEnded(0);
-  adc1 = ads1.readADC_SingleEnded(1);
-  adc2 = ads1.readADC_SingleEnded(2);
-  adc3 = ads1.readADC_SingleEnded(3);
+  for (int i = 0; i < 4; i++) {
+    int16_t adc = ads1.readADC_SingleEnded(i);
+    float voltage = adc * 0.125 / 1000.0 / VOLTAGE_DIVIDER_RATIO;
+    Serial.printf("V %d: %.2f V\n", i, voltage);
+  }
 
-  Serial.println("-----------------------------------------------------------");
-  Serial.print("AIN1: "); Serial.print(adc0); Serial.println("  ");
-  Serial.print("AIN2: "); Serial.print(adc1); Serial.println("  ");
-  Serial.print("AIN3: "); Serial.print(adc2); Serial.println("  ");
-  Serial.print("AIN4: "); Serial.print(adc3); Serial.println("  ");
+  for (int i = 0; i < 2; i++) {
+    int16_t adc = ads2.readADC_SingleEnded(i);
+    float voltage = adc * 0.125 / 1000.0 / VOLTAGE_DIVIDER_RATIO;
+    Serial.printf("V %d: %.2f V\n", i + 4, voltage);
+  }
 
-  adc0 = ads2.readADC_SingleEnded(0);
-  adc1 = ads2.readADC_SingleEnded(1);
-  adc2 = ads2.readADC_SingleEnded(2);
-  adc3 = ads2.readADC_SingleEnded(3);
-
-  Serial.print("AIN5: "); Serial.print(adc0); Serial.println("  ");
-  Serial.print("AIN6: "); Serial.print(adc1); Serial.println("  ");
 
   Serial.println(""); 
   Serial.print("Push button  ");
@@ -182,27 +188,37 @@ void loop() {
   
   digitalWrite(OUTPUT1, HIGH);
   digitalWrite(OUTPUT2, LOW);
-  delay(500);
+  delay(300);
   digitalWrite(OUTPUT1, LOW);
   digitalWrite(OUTPUT2, HIGH);
-  delay(500);
+  delay(300);
   digitalWrite(OUTPUT1, LOW);
   digitalWrite(OUTPUT2, LOW);
    
- 
-  digitalWrite(RS485_FC, HIGH);                    // Make FLOW CONTROL pin HIGH
-  delay(500);
-  Serial1.println(F("RS485 01 SUCCESS"));    // Send RS485 SUCCESS serially
-  delay(500);                                // Wait for transmission of data
-  digitalWrite(RS485_FC, LOW) ;                    // Receiving mode ON
-                                             // Serial1.flush() ;
-  delay(500);     
-  
-  while (Serial1.available()) {  // Check if data is available
-    char c = Serial1.read();     // Read data from RS485
-    Serial.write(c);             // Print data on serial monitor
+  while (Serial.available()) {
+    int inByte = Serial.read();
+    Serial2.write(inByte);
   }
- delay(500);
+  while (Serial2.available()) {
+    int inByte = Serial2.read();
+    Serial.write(inByte);
+  }
+  delay(100);
+  digitalWrite(RS485_FC, HIGH);                    
+  delay(100);
+  Serial1.println(F("RS485 01 SUCCESS"));   
+  delay(100);                                
+  digitalWrite(RS485_FC, LOW) ;                    
+                                            
+  delay(100);     
+  
+  while (Serial1.available()) {  
+    char c = Serial1.read();     
+    Serial.write(c);             
+  }
+ delay(100);
+
+  Serial.println("---------------------");
 }
 
 void displayTime(void) {
@@ -266,4 +282,38 @@ void SD_CHECK(){
   if(!SD.begin(15)) {
      Serial.println("NO SD card");            
   }
+}
+
+void wifi_test(){
+    Serial.println("");
+String str_macAddress;
+byte mac[6];
+
+WiFi.macAddress(mac);
+
+   str_macAddress = (String(mac[0] >> 4,  HEX) + String(mac[0] & 0x0F, HEX)) + (":") +
+                   (String(mac[1] >> 4,  HEX) + String(mac[1] & 0x0F, HEX)) + (":") +
+                   (String(mac[2] >> 4,  HEX) + String(mac[2] & 0x0F, HEX)) + (":") +
+                   (String(mac[3] >> 4,  HEX) + String(mac[3] & 0x0F, HEX)) + (":") +
+                   (String(mac[4] >> 4,  HEX) + String(mac[4] & 0x0F, HEX)) + (":") +
+                   (String(mac[5] >> 4,  HEX) + String(mac[5] & 0x0F, HEX));
+  str_macAddress.toUpperCase();
+  
+  Serial.println("MAC Address: " + str_macAddress);
+
+  String ssid =  str_macAddress; 
+  const char* password = "12345678";   
+
+  Serial.println("Setting up the Wi-Fi Access Point...");
+  WiFi.softAP(ssid.c_str(), password);
+
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("Access Point IP address: ");
+  Serial.println(IP);
+
+  Serial.print("Access Point SSID: ");
+  Serial.println(ssid);
+
+  Serial.println("Wi-Fi Access Point is active!");
+  Serial.println("");
 }
